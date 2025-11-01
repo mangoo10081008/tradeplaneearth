@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>거래 품목 기록</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .chart-wrapper {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>거래 품목 기록</h1>
+        
+        <!-- 입력 폼 -->
+        <div class="form-group">
+            <label for="category">카테고리:</label>
+            <select id="category">
+                <option value="">카테고리 선택</option>
+                <!-- 카테고리 옵션들은 자바스크립트로 동적 생성됨 -->
+            </select>
+            <button onclick="showCategoryManager()" style="width: auto; margin-top: 5px;">카테고리 관리</button>
+        </div>
+        <div class="form-group">
+            <label for="clientName">거래 품목:</label>
+            <input type="text" id="clientName" placeholder="거래 품목명 입력">
+        </div>
+        <div class="form-group">
+            <label for="income">지출 비용:</label>
+            <input type="number" id="income" placeholder="화폐 단위">
+        </div>
+        <div class="form-group">
+            <label for="date">날짜:</label>
+            <input type="date" id="date" placeholder="YYYY-MM-DD">
+            <script>
+                // 날짜 입력 필드 커스텀 처리
+                document.getElementById('date').addEventListener('input', function(e) {
+                    const input = e.target;
+                    const value = input.value;
+                    
+                    // 년도가 4자리 입력되면 자동으로 월 입력으로 포커스 이동
+                    if (value.length === 4 && !value.includes('-')) {
+                        input.value = value + '-';
+                    } else if (value.length === 7 && value.indexOf('-') === 4 && value.lastIndexOf('-') === 4) {
+                        // 월이 2자리 입력되면 자동으로 일 입력으로 포커스 이동
+                        input.value = value + '-';
+                    }
+                });
+                
+                // 날짜 입력 필드 포커스 시 기본 형식 제거
+                document.getElementById('date').addEventListener('focus', function(e) {
+                    if (e.target.type === 'date') {
+                        e.target.type = 'text';
+                    }
+                });
+                
+                // 날짜 입력 필드 포커스 아웃 시 기본 형식 복원
+                document.getElementById('date').addEventListener('blur', function(e) {
+                    if (e.target.value === '') {
+                        e.target.type = 'date';
+                    }
+                });
+            </script>
+        </div>
+        <button onclick="saveRecord()">기록하기</button>
+        <button onclick="showStats()">통계 보기</button>
+        <button onclick="exportData()" style="background-color: #2196F3;">데이터 내보내기</button>
+        <button onclick="importData()" style="background-color: #ff9800;">데이터 가져오기</button>
+        <button onclick="resetRecords()" style="background-color: #f44336;">기록 초기화</button>
+        
+        <!-- 카테고리 관리 모달 -->
+        <div id="categoryModal" style="display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+            <div style="background-color: white; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 50%; border-radius: 8px;">
+                <h2>카테고리 관리</h2>
+                <div class="form-group">
+                    <label for="newCategory">새 카테고리:</label>
+                    <input type="text" id="newCategory" placeholder="카테고리명 입력">
+                    <button onclick="addCategory()">추가</button>
+                </div>
+                <div id="categoryList" style="margin-top: 15px;"></div>
+                <button onclick="closeCategoryManager()" style="margin-top: 15px;">닫기</button>
+            </div>
+        </div>
+        
+        <!-- 기록 테이블 -->
+        <div id="recordsTable"></div>
+        
+        <!-- 통계 정보 -->
+        <div id="statsContainer" class="stats-container" style="display: none;">
+            <h2>거래 품목 통계</h2>
+            <div id="statsInfo"></div>
+        </div>
+        
+        <!-- 차트 -->
+        <div class="charts-container" id="chartsContainer" style="display: none;">
+            <div class="chart-wrapper">
+                <canvas id="incomeChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="timeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 로컬 스토리지에서 데이터 가져오기
+        function getRecords() {
+            const records = localStorage.getItem('clientRecords');
+            return records ? JSON.parse(records) : [];
+        }
+        
+        // 카테고리 가져오기
+        function getCategories() {
+            const categories = localStorage.getItem('categories');
+            return categories ? JSON.parse(categories) : ['일반', '기업', '개인'];
+        }
+        
+        // 데이터 내보내기 기능
+        function exportData() {
+            const data = {
+                clientRecords: getRecords(),
+                categories: getCategories()
+            };
+            
+            const dataStr = JSON.stringify(data);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = '거래품목기록_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            alert('데이터가 성공적으로 내보내졌습니다!');
+        }
+        
+        // 데이터 가져오기 기능
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        
+                        if (data.clientRecords && data.categories) {
+                            localStorage.setItem('clientRecords', JSON.stringify(data.clientRecords));
+                            localStorage.setItem('categories', JSON.stringify(data.categories));
+                            
+                            updateTable();
+                            updateCategoryOptions();
+                            alert('데이터가 성공적으로 가져와졌습니다!');
+                        } else {
+                            alert('유효하지 않은 데이터 형식입니다.');
+                        }
+                    } catch (error) {
+                        alert('파일을 읽는 중 오류가 발생했습니다: ' + error.message);
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+        
+        // 카테고리 저장하기
+        function saveCategories(categories) {
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+        
+        // 카테고리 옵션 업데이트
+        function updateCategoryOptions() {
+            const categories = getCategories();
+            const categorySelect = document.getElementById('category');
+            
+            // 기존 옵션 제거 (첫 번째 옵션 제외)
+            while (categorySelect.options.length > 1) {
+                categorySelect.remove(1);
+            }
+            
+            // 새 옵션 추가
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categorySelect.appendChild(option);
+            });
+        }
+        
+        // 카테고리 관리 모달 표시
+        function showCategoryManager() {
+            document.getElementById('categoryModal').style.display = 'block';
+            updateCategoryList();
+        }
+        
+        // 카테고리 관리 모달 닫기
+        function closeCategoryManager() {
+            document.getElementById('categoryModal').style.display = 'none';
+        }
+        
+        // 카테고리 목록 업데이트
+        function updateCategoryList() {
+            const categories = getCategories();
+            const categoryList = document.getElementById('categoryList');
+            
+            let html = '<ul style="list-style-type: none; padding: 0;">';
+            
+            categories.forEach((category, index) => {
+                html += `
+                    <li style="margin-bottom: 8px;">
+                        ${category}
+                        <button onclick="deleteCategory(${index})" style="background-color: #f44336; margin-left: 10px; padding: 5px 10px;">삭제</button>
+                    </li>
+                `;
+            });
+            
+            html += '</ul>';
+            categoryList.innerHTML = html;
+        }
+        
+        // 카테고리 추가
+        function addCategory() {
+            const newCategory = document.getElementById('newCategory').value.trim();
+            
+            if (!newCategory) {
+                alert('카테고리명을 입력해주세요!');
+                return;
+            }
+            
+            const categories = getCategories();
+            
+            if (categories.includes(newCategory)) {
+                alert('이미 존재하는 카테고리입니다!');
+                return;
+            }
+            
+            categories.push(newCategory);
+            saveCategories(categories);
+            
+            document.getElementById('newCategory').value = '';
+            updateCategoryList();
+            updateCategoryOptions();
+        }
+        
+        // 카테고리 삭제
+        function deleteCategory(index) {
+            const categories = getCategories();
+            
+            if (confirm(`'${categories[index]}' 카테고리를 삭제하시겠습니까?`)) {
+                categories.splice(index, 1);
+                saveCategories(categories);
+                updateCategoryList();
+                updateCategoryOptions();
+            }
+        }
+
+        // 데이터 저장하기
+        function saveRecord() {
+            const category = document.getElementById('category').value;
+            const clientName = document.getElementById('clientName').value;
+            const income = Number(document.getElementById('income').value);
+            const date = document.getElementById('date').value;
+
+            if (!category) {
+                alert('카테고리를 선택해주세요!');
+                return;
+            }
+            if (!clientName.trim()) {
+                alert('거래 품목명을 입력해주세요!');
+                return;
+            }
+            if (!income || income <= 0) {
+                alert('올바른 지출 비용을 입력해주세요!');
+                return;
+            }
+            if (!date) {
+                alert('날짜를 선택해주세요!');
+                return;
+            }
+
+            const record = {
+                category,
+                clientName,
+                income,
+                date
+            };
+
+            const records = getRecords();
+            records.push(record);
+            localStorage.setItem('clientRecords', JSON.stringify(records));
+
+            // 입력 폼 초기화
+            document.getElementById('category').value = '';
+            document.getElementById('clientName').value = '';
+            document.getElementById('income').value = '';
+            document.getElementById('date').value = '';
+
+            updateTable();
+        }
+
+        // 기록 초기화
+        function resetRecords() {
+            if (confirm('모든 기록을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                localStorage.removeItem('clientRecords');
+                updateTable();
+                document.getElementById('statsContainer').style.display = 'none';
+                document.getElementById('chartsContainer').style.display = 'none';
+            }
+        }
+
+        // 테이블 업데이트
+        function updateTable() {
+            const records = getRecords();
+            const tableDiv = document.getElementById('recordsTable');
+            
+            let html = `
+                <h2>기록 목록</h2>
+                <table>
+                    <tr>
+                        <th>날짜</th>
+                        <th>카테고리</th>
+                        <th>거래 품목</th>
+                        <th>지출 비용</th>
+                    </tr>
+            `;
+
+            records.forEach(record => {
+                html += `
+                    <tr>
+                        <td>${record.date}</td>
+                        <td>${record.category}</td>
+                        <td>${record.clientName}</td>
+                        <td>${record.income}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</table>';
+            tableDiv.innerHTML = html;
+        }
+
+        // 통계 계산 및 표시
+        function showStats() {
+            const records = getRecords();
+            const statsContainer = document.getElementById('statsContainer');
+            const chartsContainer = document.getElementById('chartsContainer');
+            const statsInfo = document.getElementById('statsInfo');
+
+            // 카테고리별 데이터 집계
+            const categoryStats = {};
+            records.forEach(record => {
+                if (!categoryStats[record.category]) {
+                    categoryStats[record.category] = {
+                        totalIncome: 0,
+                        count: 0,
+                        clients: {}
+                    };
+                }
+                categoryStats[record.category].totalIncome += record.income;
+                categoryStats[record.category].count++;
+                
+                // 거래처별 통계도 추가
+                if (!categoryStats[record.category].clients[record.clientName]) {
+                    categoryStats[record.category].clients[record.clientName] = {
+                        totalIncome: 0,
+                        count: 0
+                    };
+                }
+                categoryStats[record.category].clients[record.clientName].totalIncome += record.income;
+                categoryStats[record.category].clients[record.clientName].count++;
+            });
+
+            // 통계 정보 HTML 생성
+             let statsHtml = '<table><tr><th>카테고리</th><th>거래 품목 수</th><th>총 지출 비용</th><th>평균 지출 비용/품목</th></tr>';
+             let totalIncome = 0;
+             let totalClients = 0;
+
+             Object.entries(categoryStats).forEach(([category, stats]) => {
+                 const clientCount = Object.keys(stats.clients).length;
+                 const avgIncomePerClient = (clientCount > 0) ? 
+                     (stats.totalIncome / clientCount).toFixed(2) : 0;
+                 
+                 statsHtml += `
+                     <tr>
+                         <td>${category}</td>
+                         <td>${clientCount}</td>
+                         <td>${stats.totalIncome}</td>
+                         <td>${avgIncomePerClient}</td>
+                     </tr>
+                 `;
+                 
+                 totalIncome += stats.totalIncome;
+                 totalClients += clientCount;
+             });
+
+             const totalAvgIncomePerClient = (totalClients > 0) ? 
+                 (totalIncome / totalClients).toFixed(2) : 0;
+
+             statsHtml += `
+                 <tr>
+                     <td><strong>전체 합계</strong></td>
+                     <td><strong>${totalClients}</strong></td>
+                     <td><strong>${totalIncome}</strong></td>
+                     <td><strong>${totalAvgIncomePerClient}</strong></td>
+                 </tr>
+             </table>`;
+
+            statsInfo.innerHTML = statsHtml;
+            statsContainer.style.display = 'block';
+            chartsContainer.style.display = 'grid';
+
+            // 차트 업데이트
+            updateCharts(taskStats);
+        }
+
+        // 차트 업데이트
+        function updateCharts(categoryStats) {
+            const categories = Object.keys(categoryStats);
+            const incomes = categories.map(category => categoryStats[category].totalIncome);
+            const clientCounts = categories.map(category => Object.keys(categoryStats[category].clients).length);
+
+            // 수익 차트
+            new Chart(document.getElementById('incomeChart'), {
+                type: 'bar',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        label: '카테고리별 총 지출 비용',
+                        data: incomes,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // 거래처 수 차트
+            new Chart(document.getElementById('timeChart'), {
+                type: 'bar',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        label: '카테고리별 거래 품목 수',
+                        data: clientCounts,
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // 페이지 로드 시 테이블 및 카테고리 옵션 업데이트
+        window.addEventListener('load', function() {
+            updateTable();
+            updateCategoryOptions();
+            
+            // 현재 날짜 설정
+            document.getElementById('date').valueAsDate = new Date();
+            
+            // 자동 저장 알림 표시
+            const lastBackup = localStorage.getItem('lastBackup');
+            if (!lastBackup || (new Date().getTime() - parseInt(lastBackup)) > 86400000) { // 24시간 이상 지났으면
+                setTimeout(() => {
+                    if (confirm('데이터를 컴퓨터에 저장하시겠습니까? (자동 백업)')) {
+                        exportData();
+                        localStorage.setItem('lastBackup', new Date().getTime());
+                    }
+                }, 2000);
+            }
+        });
+    </script>
+</body>
+</html>
